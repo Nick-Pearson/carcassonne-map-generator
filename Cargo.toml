@@ -1,0 +1,19 @@
+[package]
+edition = "2021"
+name = "carcassonne-map-generator"
+publish = false
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+js-sys = "0.3"
+wasm-bindgen = { version = "0.2", features = ["serde"] }
+
+[dependencies.web-sys]
+features = ['CanvasRenderingContext2d', 'Document', 'Element', 'HtmlCanvasElement', 'Window']
+version = "0.3"
+
+[build-dependencies]
+wasm-pack = "0.13.1"

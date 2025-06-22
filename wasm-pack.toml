@@ -1,0 +1,16 @@
+[package]
+name = "carcassonne-map-generator"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[build]
+target = "wasm32-unknown-unknown"
+out-dir = "pkg"
