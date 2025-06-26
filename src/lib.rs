@@ -78,20 +78,25 @@ pub async fn render_map(tileart_js: JsValue) {
     canvas.set_width(canvas_width);
     canvas.set_height(canvas_height);
 
-    let loaded_art = load_base_game_tiles(&tileart.base.expect("msg: Base game tile art is missing"));
+    let loaded_art =
+        load_base_game_tiles(&tileart.base.expect("msg: Base game tile art is missing"));
     let loaded_art_len = loaded_art.len();
     wait_for_images(&loaded_art).await;
     log::info!("Finished loading tile art");
 
-    let mut map = Map::new(loaded_art, 1 + (canvas_width as f64 / TILE_SIZE) as u32, 1 + (canvas_height as f64 / TILE_SIZE) as u32);
+    let mut map = Map::new(
+        loaded_art,
+        1 + (canvas_width as f64 / TILE_SIZE) as u32,
+        1 + (canvas_height as f64 / TILE_SIZE) as u32,
+    );
     log::info!("Map created with size: {}x{}", map.size_x(), map.size_y());
 
     for y in 0..map.size_y() {
         for x in 0..map.size_x() {
             map.tiles[y as usize][x as usize] = Some(PlacedTile {
-                    tile_spec: 0,
-                    roation: 0,
-                })
+                tile_spec: 0,
+                roation: 0,
+            })
         }
     }
 
@@ -105,10 +110,7 @@ pub async fn render_map(tileart_js: JsValue) {
     draw_map(&context, &map);
 }
 
-fn draw_map(
-    context: &web_sys::CanvasRenderingContext2d,
-    map: &Map
-) {    
+fn draw_map(context: &web_sys::CanvasRenderingContext2d, map: &Map) {
     for y in 0..map.size_y() {
         let pos_y = y as f64 * TILE_SIZE;
         for x in 0..map.size_x() {
@@ -126,30 +128,37 @@ fn draw_tile(
     tile: &TileSpec,
     x: f64,
     y: f64,
-    rotation: u8
-) 
-{
+    rotation: u8,
+) {
     context.save();
-    context.translate(x + HALF_TILE_SIZE, y + HALF_TILE_SIZE).unwrap();
+    context
+        .translate(x + HALF_TILE_SIZE, y + HALF_TILE_SIZE)
+        .unwrap();
     for _ in 0..rotation {
         context.rotate(-std::f64::consts::FRAC_PI_2).unwrap();
     }
     context
-        .draw_image_with_html_image_element_and_dw_and_dh(&tile.art, -HALF_TILE_SIZE, -HALF_TILE_SIZE, TILE_SIZE, TILE_SIZE)
+        .draw_image_with_html_image_element_and_dw_and_dh(
+            &tile.art,
+            -HALF_TILE_SIZE,
+            -HALF_TILE_SIZE,
+            TILE_SIZE,
+            TILE_SIZE,
+        )
         .unwrap();
-    context.restore();    
+    context.restore();
 }
 
 struct PlacedTile {
     tile_spec: u8,
-    roation: u8
+    roation: u8,
 }
 
 struct Map {
     size_x: u32,
     size_y: u32,
     specs: Vec<TileSpec>,
-    tiles: Vec<Vec<Option<PlacedTile>>>
+    tiles: Vec<Vec<Option<PlacedTile>>>,
 }
 
 impl Map {
@@ -162,7 +171,12 @@ impl Map {
             }
             tiles.push(row);
         }
-        Map { size_x, size_y, specs, tiles }
+        Map {
+            size_x,
+            size_y,
+            specs,
+            tiles,
+        }
     }
 
     fn size_x(&self) -> u32 {
@@ -177,7 +191,7 @@ impl Map {
     //     if x < self.tiles.len() && y < self.tiles[x].len() {
     //         self.tiles[x].push(PlacedTile { tile_spec, roation: rotation });
     //     }
-    // }   
+    // }
 }
 
 enum Feature {
