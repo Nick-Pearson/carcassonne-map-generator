@@ -9,10 +9,15 @@ crate-type = ["cdylib"]
 
 [dependencies]
 js-sys = "0.3"
-wasm-bindgen = { version = "0.2", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+wasm-bindgen = { version = "0.2" }
+wasm-bindgen-futures = "0.4.50"
+serde-wasm-bindgen = "0.6"
+log = "0.4.6"
+wasm-logger = "0.2.0"
 
 [dependencies.web-sys]
-features = ['CanvasRenderingContext2d', 'Document', 'Element', 'HtmlCanvasElement', 'Window']
+features = ['CanvasRenderingContext2d', 'Document', 'Element', 'HtmlCanvasElement', 'Window', 'HtmlElement', 'HtmlImageElement']
 version = "0.3"
 
 [build-dependencies]
