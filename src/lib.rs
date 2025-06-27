@@ -2,7 +2,7 @@ use std::str;
 
 use log::info;
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlImageElement};
+use web_sys::HtmlImageElement;
 
 const TILE_SIZE: f64 = 48.0;
 const HALF_TILE_SIZE: f64 = TILE_SIZE / 2.0;
@@ -120,7 +120,6 @@ fn place_river_tiles(map: &mut Map, river_art_range: std::ops::Range<usize>) {
     place_river_tile(map, &mut remaining, start_x, start_y, draw_deck[0], 0);
 
     while let Some((x, y)) = remaining.pop() {
-        
         for _ in 0..100 {
             let rotation = js_sys::Math::floor(js_sys::Math::random() * 4.0) as u8;
             let deck_idx =
