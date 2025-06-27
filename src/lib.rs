@@ -1,9 +1,10 @@
 use std::str;
 
+use log::info;
 use wasm_bindgen::prelude::*;
-use web_sys::HtmlImageElement;
+use web_sys::{HtmlImageElement};
 
-const TILE_SIZE: f64 = 64.0;
+const TILE_SIZE: f64 = 48.0;
 const HALF_TILE_SIZE: f64 = TILE_SIZE / 2.0;
 
 #[derive(serde::Deserialize)]
@@ -78,27 +79,26 @@ pub async fn render_map(tileart_js: JsValue) {
     canvas.set_width(canvas_width);
     canvas.set_height(canvas_height);
 
-    let loaded_art =
+    let base_game_art =
         load_base_game_tiles(&tileart.base.expect("msg: Base game tile art is missing"));
-    let loaded_art_len = loaded_art.len();
-    wait_for_images(&loaded_art).await;
+    let base_game_art_len = base_game_art.len();
+    let river_art = load_river_game_tiles(&tileart.river.expect("msg: River tile art is missing"));
+    let river_art_len = river_art.len();
+    let all_art = [base_game_art, river_art].concat();
+    wait_for_images(&all_art).await;
     log::info!("Finished loading tile art");
 
     let mut map = Map::new(
-        loaded_art,
+        all_art,
         1 + (canvas_width as f64 / TILE_SIZE) as u32,
         1 + (canvas_height as f64 / TILE_SIZE) as u32,
     );
     log::info!("Map created with size: {}x{}", map.size_x(), map.size_y());
 
-    for y in 0..map.size_y() {
-        for x in 0..map.size_x() {
-            map.tiles[y as usize][x as usize] = Some(PlacedTile {
-                tile_spec: 0,
-                roation: 0,
-            })
-        }
-    }
+    place_river_tiles(
+        &mut map,
+        base_game_art_len..base_game_art_len + river_art_len,
+    );
 
     let context = canvas
         .get_context("2d")
@@ -110,6 +110,79 @@ pub async fn render_map(tileart_js: JsValue) {
     draw_map(&context, &map);
 }
 
+fn place_river_tiles(map: &mut Map, river_art_range: std::ops::Range<usize>) {
+    let start_x = (js_sys::Math::random() * (map.size_x() as f64)) as usize;
+    let start_y = (js_sys::Math::random() * (map.size_y() as f64)) as usize;
+
+    let draw_deck = build_draw_deck(map, river_art_range);
+    let mut remaining: Vec<(usize, usize)> = Vec::new();
+
+    place_river_tile(map, &mut remaining, start_x, start_y, draw_deck[0], 0);
+
+    while let Some((x, y)) = remaining.pop() {
+        
+        for _ in 0..100 {
+            let rotation = js_sys::Math::floor(js_sys::Math::random() * 4.0) as u8;
+            let deck_idx =
+                js_sys::Math::floor(js_sys::Math::random() * draw_deck.len() as f64) as usize;
+            let selected_card = draw_deck[deck_idx];
+
+            if map.can_be_placed(selected_card, x, y, rotation) {
+                place_river_tile(map, &mut remaining, x, y, selected_card, rotation);
+                break;
+            }
+        }
+    }
+}
+
+fn place_river_tile(
+    map: &mut Map,
+    remaining: &mut Vec<(usize, usize)>,
+    x: usize,
+    y: usize,
+    tile: u8,
+    rotation: u8,
+) {
+    let tile_spec = &map.specs[tile as usize];
+
+    map.tiles[y][x] = Some(PlacedTile {
+        tile_spec: tile,
+        rotation,
+    });
+
+    for i in 0..4 {
+        let edge_feature = tile_spec.edge_features[(i + rotation as usize) % 4];
+        if edge_feature == Feature::River {
+            let (dx, dy) = match i {
+                0 => (0, -1), // North
+                1 => (1, 0),  // East
+                2 => (0, 1),  // South
+                3 => (-1, 0), // West
+                _ => unreachable!(),
+            };
+            let new_x = (x as i32) + dx;
+            let new_y = (y as i32) + dy;
+
+            if map.is_valid_position(new_x, new_y) && map.has_no_tile(new_x, new_y) {
+                remaining.push((new_x as usize, new_y as usize));
+            }
+        }
+    }
+    info!("Placed initial river tile at ({}, {})", x, y);
+    info!("Remaining positions: {:?}", remaining);
+}
+
+fn build_draw_deck(map: &mut Map, range: std::ops::Range<usize>) -> Vec<u8> {
+    let mut deck = Vec::new();
+    for i in range {
+        let tile_spec = &map.specs[i];
+        for _ in 0..tile_spec.count {
+            deck.push(i as u8);
+        }
+    }
+    deck
+}
+
 fn draw_map(context: &web_sys::CanvasRenderingContext2d, map: &Map) {
     for y in 0..map.size_y() {
         let pos_y = y as f64 * TILE_SIZE;
@@ -117,7 +190,7 @@ fn draw_map(context: &web_sys::CanvasRenderingContext2d, map: &Map) {
             if let Some(tile) = &map.tiles[y as usize][x as usize] {
                 let tile_spec = &map.specs[tile.tile_spec as usize];
                 let pos_x = x as f64 * TILE_SIZE;
-                draw_tile(context, tile_spec, pos_x, pos_y, tile.roation);
+                draw_tile(context, tile_spec, pos_x, pos_y, tile.rotation);
             }
         }
     }
@@ -151,7 +224,7 @@ fn draw_tile(
 
 struct PlacedTile {
     tile_spec: u8,
-    roation: u8,
+    rotation: u8,
 }
 
 struct Map {
@@ -187,13 +260,48 @@ impl Map {
         self.size_y
     }
 
-    // fn place_tile(&mut self, tile_spec: u8, rotation: u8, x: usize, y: usize) {
-    //     if x < self.tiles.len() && y < self.tiles[x].len() {
-    //         self.tiles[x].push(PlacedTile { tile_spec, roation: rotation });
-    //     }
-    // }
+    fn is_valid_position(&self, x: i32, y: i32) -> bool {
+        x >= 0 && y >= 0 && (x as u32) < self.size_x && (y as u32) < self.size_y
+    }
+
+    fn has_no_tile(&self, x: i32, y: i32) -> bool {
+        if !self.is_valid_position(x, y) {
+            return false;
+        }
+        self.tiles[y as usize][x as usize].is_none()
+    }
+
+    fn can_be_placed(&self, tile: u8, x: usize, y: usize, rotation: u8) -> bool {
+        let tile_spec = &self.specs[tile as usize];
+        for i in 0..4 {
+            let edge_feature = tile_spec.edge_features[(i + rotation as usize) % 4];
+            let (dx, dy) = match i {
+                0 => (0, -1), // North
+                1 => (1, 0),  // East
+                2 => (0, 1),  // South
+                3 => (-1, 0), // West
+                _ => unreachable!(),
+            };
+
+            let new_x = x as i32 + dx;
+            let new_y = y as i32 + dy;
+            if self.is_valid_position(new_x, new_y) {
+                if let Some(other_tile) = &self.tiles[new_y as usize][new_x as usize] {
+                    let other_tile_spec = &self.specs[other_tile.tile_spec as usize];
+                    let other_edge_feature =
+                        other_tile_spec.edge_features[(2 + i + other_tile.rotation as usize) % 4];
+                    if other_edge_feature != edge_feature {
+                        // If the edge features do not match, we cannot place the tile
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Feature {
     None,
     City,
@@ -202,6 +310,7 @@ enum Feature {
     Cloister,
 }
 
+#[derive(Clone, Debug)]
 struct TileSpec {
     cloister: bool,
     sheild: bool,
@@ -452,6 +561,89 @@ fn load_base_game_tiles(art: &BaseGameTileArt) -> Vec<TileSpec> {
             edge_features: [Feature::None, Feature::None, Feature::Road, Feature::Road],
             art: load_image(roadsw).unwrap(),
             count: 9,
+        });
+    }
+
+    tiles
+}
+
+fn load_river_game_tiles(art: &RiverTileArt) -> Vec<TileSpec> {
+    let mut tiles = Vec::new();
+
+    if let Some(riverew) = &art.riverew {
+        tiles.push(TileSpec {
+            cloister: false,
+            sheild: false,
+            edge_features: [Feature::None, Feature::River, Feature::None, Feature::River],
+            art: load_image(riverew).unwrap(),
+            count: 1,
+        });
+    }
+    if let Some(cloister_riverew_roads) = &art.cloister_riverew_roads {
+        tiles.push(TileSpec {
+            cloister: true,
+            sheild: false,
+            edge_features: [Feature::None, Feature::River, Feature::Road, Feature::River],
+            art: load_image(cloister_riverew_roads).unwrap(),
+            count: 1,
+        });
+    }
+    if let Some(riveres_citynw) = &art.riveres_citynw {
+        tiles.push(TileSpec {
+            cloister: false,
+            sheild: false,
+            edge_features: [Feature::City, Feature::River, Feature::River, Feature::City],
+            art: load_image(riveres_citynw).unwrap(),
+            count: 1,
+        });
+    }
+    if let Some(riverew_cityn_citys) = &art.riverew_cityn_citys {
+        tiles.push(TileSpec {
+            cloister: false,
+            sheild: false,
+            edge_features: [Feature::City, Feature::River, Feature::City, Feature::River],
+            art: load_image(riverew_cityn_citys).unwrap(),
+            count: 1,
+        });
+    }
+
+    if let Some(riverew_cityn_roads) = &art.riverew_cityn_roads {
+        tiles.push(TileSpec {
+            cloister: false,
+            sheild: false,
+            edge_features: [Feature::City, Feature::River, Feature::Road, Feature::River],
+            art: load_image(riverew_cityn_roads).unwrap(),
+            count: 1,
+        });
+    }
+
+    if let Some(riverew_roadns) = &art.riverew_roadns {
+        tiles.push(TileSpec {
+            cloister: false,
+            sheild: false,
+            edge_features: [Feature::Road, Feature::River, Feature::Road, Feature::River],
+            art: load_image(riverew_roadns).unwrap(),
+            count: 1,
+        });
+    }
+
+    if let Some(riversw) = &art.riversw {
+        tiles.push(TileSpec {
+            cloister: false,
+            sheild: false,
+            edge_features: [Feature::None, Feature::None, Feature::River, Feature::River],
+            art: load_image(riversw).unwrap(),
+            count: 1,
+        });
+    }
+
+    if let Some(riversw_roadne) = &art.riversw_roadne {
+        tiles.push(TileSpec {
+            cloister: false,
+            sheild: false,
+            edge_features: [Feature::Road, Feature::Road, Feature::River, Feature::River],
+            art: load_image(riversw_roadne).unwrap(),
+            count: 1,
         });
     }
 
