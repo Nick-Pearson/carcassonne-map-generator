@@ -95,10 +95,19 @@ pub async fn render_map(tileart_js: JsValue) {
     );
     log::info!("Map created with size: {}x{}", map.size_x(), map.size_y());
 
-    place_river_tiles(
-        &mut map,
-        base_game_art_len..base_game_art_len + river_art_len,
-    );
+    for _ in 0..1000 {
+        let result = place_river_tiles(
+            &mut map,
+            base_game_art_len..base_game_art_len + river_art_len,
+        );
+        if result {
+            info!("River tiles placed successfully");
+            break;
+        } else {
+            info!("Failed to place river tiles, retrying...");
+            map.clear_tiles();
+        }
+    }
 
     let context = canvas
         .get_context("2d")
@@ -110,7 +119,7 @@ pub async fn render_map(tileart_js: JsValue) {
     draw_map(&context, &map);
 }
 
-fn place_river_tiles(map: &mut Map, river_art_range: std::ops::Range<usize>) {
+fn place_river_tiles(map: &mut Map, river_art_range: std::ops::Range<usize>) -> bool {
     let start_x = (js_sys::Math::random() * (map.size_x() as f64)) as usize;
     let start_y = (js_sys::Math::random() * (map.size_y() as f64)) as usize;
 
@@ -120,6 +129,7 @@ fn place_river_tiles(map: &mut Map, river_art_range: std::ops::Range<usize>) {
     place_river_tile(map, &mut remaining, start_x, start_y, draw_deck[0], 0);
 
     while let Some((x, y)) = remaining.pop() {
+        let mut placed = false;
         for _ in 0..100 {
             let rotation = js_sys::Math::floor(js_sys::Math::random() * 4.0) as u8;
             let deck_idx =
@@ -128,10 +138,17 @@ fn place_river_tiles(map: &mut Map, river_art_range: std::ops::Range<usize>) {
 
             if map.can_be_placed(selected_card, x, y, rotation) {
                 place_river_tile(map, &mut remaining, x, y, selected_card, rotation);
+                placed = true;
                 break;
             }
         }
+
+        if !placed {
+            // If we couldn't place any tile here, we stop trying
+            return false;
+        }
     }
+    true
 }
 
 fn place_river_tile(
@@ -167,8 +184,6 @@ fn place_river_tile(
             }
         }
     }
-    info!("Placed initial river tile at ({}, {})", x, y);
-    info!("Remaining positions: {:?}", remaining);
 }
 
 fn build_draw_deck(map: &mut Map, range: std::ops::Range<usize>) -> Vec<u8> {
@@ -273,7 +288,7 @@ impl Map {
     fn can_be_placed(&self, tile: u8, x: usize, y: usize, rotation: u8) -> bool {
         let tile_spec = &self.specs[tile as usize];
         for i in 0..4 {
-            let edge_feature = tile_spec.edge_features[(i + rotation as usize) % 4];
+            let edge_feature: Feature = tile_spec.edge_features[(i + rotation as usize) % 4];
             let (dx, dy) = match i {
                 0 => (0, -1), // North
                 1 => (1, 0),  // East
@@ -297,6 +312,14 @@ impl Map {
             }
         }
         true
+    }
+
+    fn clear_tiles(&mut self) {
+        for row in &mut self.tiles {
+            for tile in row {
+                *tile = None;
+            }
+        }
     }
 }
 
