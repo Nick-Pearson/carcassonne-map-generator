@@ -4,7 +4,7 @@ use log::info;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlImageElement;
 
-const TILE_SIZE: f64 = 48.0;
+const TILE_SIZE: f64 = 128.0;
 const HALF_TILE_SIZE: f64 = TILE_SIZE / 2.0;
 
 #[derive(serde::Deserialize)]
@@ -74,8 +74,10 @@ pub async fn render_map(tileart_js: JsValue) {
         .dyn_into::<web_sys::HtmlCanvasElement>()
         .map_err(|_| ())
         .unwrap();
-    let canvas_width = window.inner_width().unwrap().as_f64().unwrap() as u32;
-    let canvas_height = window.inner_height().unwrap().as_f64().unwrap() as u32;
+    // let canvas_width = window.inner_width().unwrap().as_f64().unwrap() as u32;
+    // let canvas_height = window.inner_height().unwrap().as_f64().unwrap() as u32;
+    let canvas_width = 4961;
+    let canvas_height = 7016;
     canvas.set_width(canvas_width);
     canvas.set_height(canvas_height);
 
@@ -108,6 +110,8 @@ pub async fn render_map(tileart_js: JsValue) {
             map.clear_tiles();
         }
     }
+
+    place_remaining_tiles(&mut map, 0..base_game_art_len);
 
     let context = canvas
         .get_context("2d")
@@ -181,6 +185,42 @@ fn place_river_tile(
 
             if map.is_valid_position(new_x, new_y) && map.has_no_tile(new_x, new_y) {
                 remaining.push((new_x as usize, new_y as usize));
+            }
+        }
+    }
+}
+
+fn place_remaining_tiles(map: &mut Map, range: std::ops::Range<usize>) {
+    let draw_deck = build_draw_deck(map, range);
+    let mut remaining: Vec<(usize, usize)> = Vec::new();
+
+    for y in 0..map.size_y() {
+        for x in 0..map.size_x() {
+            if map.has_no_tile(x as i32, y as i32) {
+                remaining.push((x as usize, y as usize));
+            }
+        }
+    }
+
+    info!("Remaining tiles to place: {}", remaining.len());
+
+    while let Some((x, y)) = remaining.pop() {
+        for _ in 0..5000 {
+            let deck_idx =
+                js_sys::Math::floor(js_sys::Math::random() * draw_deck.len() as f64) as usize;
+            let selected_card = draw_deck[deck_idx];
+            let selected_tile_spec = &map.specs[selected_card as usize];
+            let rotation = match selected_tile_spec.can_be_rotated() {
+                true => js_sys::Math::floor(js_sys::Math::random() * 4.0) as u8,
+                false => 0, // If the tile cannot be rotated, we use rotation 0
+            };
+
+            if map.can_be_placed(selected_card, x, y, rotation) {
+                map.tiles[y][x] = Some(PlacedTile {
+                    tile_spec: selected_card,
+                    rotation,
+                });
+                break;
             }
         }
     }
@@ -339,6 +379,15 @@ struct TileSpec {
     edge_features: [Feature; 4],
     art: HtmlImageElement,
     count: i32,
+}
+
+impl TileSpec {
+    fn can_be_rotated(&self) -> bool {
+        !self
+            .edge_features
+            .iter()
+            .all(|&f| f == self.edge_features[0])
+    }
 }
 
 fn load_image(url: &str) -> Result<HtmlImageElement, JsValue> {
