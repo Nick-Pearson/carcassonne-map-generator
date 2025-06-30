@@ -42,11 +42,9 @@ pub struct RiverTileArt {
     riverew: Option<String>,
     riverew_cityn_citys: Option<String>,
     riverew_cityn_roads: Option<String>,
-    riverew_end: Option<String>,
     riverew_roadns: Option<String>,
     riversw: Option<String>,
     riversw_roadne: Option<String>,
-    river_start: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -369,7 +367,6 @@ enum Feature {
     City,
     Road,
     River,
-    Cloister,
 }
 
 #[derive(Clone, Debug)]
