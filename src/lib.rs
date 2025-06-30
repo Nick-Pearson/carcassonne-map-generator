@@ -203,7 +203,7 @@ fn place_remaining_tiles(map: &mut Map, range: std::ops::Range<usize>) {
     info!("Remaining tiles to place: {}", remaining.len());
 
     while let Some((x, y)) = remaining.pop() {
-        for _ in 0..5000 {
+        for _ in 0..15000 {
             let deck_idx =
                 js_sys::Math::floor(js_sys::Math::random() * draw_deck.len() as f64) as usize;
             let selected_card = draw_deck[deck_idx];

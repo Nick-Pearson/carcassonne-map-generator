@@ -1,5 +1,5 @@
 import './style.css';
-import tileart from './tileart/zac/index.js';
+import tileart from './tileart/highres/index.js';
 import { init, render_map } from './pkg';
 
 init();
